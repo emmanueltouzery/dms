@@ -3,6 +3,7 @@ package dms
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -86,18 +87,18 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 		Restricted: 1,
 		ParentID:   cdsObject.ParentID(),
 	}
-	iconURI := (&url.URL{
-		Scheme: "http",
-		Host:   host,
-		Path:   iconPath,
-		RawQuery: url.Values{
-			"path": {cdsObject.Path},
-		}.Encode(),
-	}).String()
-	obj.Icon = iconURI
+	// iconURI := (&url.URL{
+	// 	Scheme: "http",
+	// 	Host:   host,
+	// 	Path:   iconPath,
+	// 	RawQuery: url.Values{
+	// 		"path": {cdsObject.Path},
+	// 	}.Encode(),
+	// }).String()
+	// obj.Icon = iconURI
 	// TODO(anacrolix): This might not be necessary due to item res image
 	// element.
-	obj.AlbumArtURI = iconURI
+	// obj.AlbumArtURI = iconURI
 
 	switch dmsMediaItem.Type {
 		case "video":
@@ -113,6 +114,24 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 		obj.Title = strings.TrimSuffix(fileInfo.Name(), dmsMetadataSuffix)
 	}
 	obj.Date = upnpav.Timestamp{Time: fileInfo.ModTime()}
+
+
+	// fmt.Println("fileinfo.name", fileInfo.Name())
+	// fmt.Println("cds suff", cdsObject.FilePath())
+	// subtitleFilePath := strings.TrimSuffix(fileInfo.Name(), filepath.Ext(fileInfo.Name())) + ".srt"
+	// _, error := os.Stat(subtitleFilePath)
+	// if error == nil || !errors.Is(error, os.ErrNotExist) {
+	// 	var srtPath = (&url.URL{
+	// 		Scheme: "http",
+	// 		Host:   host,
+	// 		Path:   resPath,
+	// 		RawQuery: url.Values{
+	// 			"path":  {subtitleFilePath},
+	// 		}.Encode(),
+	// 	}).String()
+	// 	fmt.Println("CaptionInfoEx", srtPath) // ###:
+	// 	obj.CaptionInfo = srtPath
+	// }
 
 	item := upnpav.Item{
 		Object: obj,
@@ -135,7 +154,7 @@ func (me *contentDirectoryService) cdsObjectDynamicStreamToUpnpavObject(cdsObjec
 					"index": {strconv.Itoa(i)},
 				}.Encode(),
 			}).String(),
-			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", dmsStream.MimeType, dlna.ContentFeatures{
+			ProtocolInfo: fmt.Sprintf("http-get:*:%s:%s", strings.Replace(dmsStream.MimeType, "matroska", "mkv", 1), dlna.ContentFeatures{
 				ProfileName:     dmsStream.DlnaProfileName,
 				SupportRange:    false,
 				SupportTimeSeek: false,
@@ -218,18 +237,37 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 		}
 		return
 	}
-	iconURI := (&url.URL{
-		Scheme: "http",
-		Host:   host,
-		Path:   iconPath,
-		RawQuery: url.Values{
-			"path": {cdsObject.Path},
-		}.Encode(),
-	}).String()
-	obj.Icon = iconURI
+
+	fmt.Println("fileinfo.name", fileInfo.Name())
+	fmt.Println("cds suff", cdsObject.FilePath())
+	subtitleFilePath := strings.TrimSuffix(cdsObject.Path, filepath.Ext(cdsObject.Path)) + ".srt"
+	_, error := os.Stat(subtitleFilePath)
+	if error == nil || !errors.Is(error, os.ErrNotExist) {
+		var srtPath = (&url.URL{
+			Scheme: "http",
+			Host:   host,
+			Path:   resPath,
+			RawQuery: url.Values{
+				"path":  {subtitleFilePath},
+			}.Encode(),
+		}).String()
+		fmt.Println("CaptionInfoEx", srtPath) // ###:
+		// srtPath = "http://192.168.1.16:8200/Captions/2982.srt"
+		obj.CaptionInfo = srtPath
+	}
+
+	// iconURI := (&url.URL{
+	// 	Scheme: "http",
+	// 	Host:   host,
+	// 	Path:   iconPath,
+	// 	RawQuery: url.Values{
+	// 		"path": {cdsObject.Path},
+	// 	}.Encode(),
+	// }).String()
+	// obj.Icon = iconURI
 	// TODO(anacrolix): This might not be necessary due to item res image
 	// element.
-	obj.AlbumArtURI = iconURI
+	// obj.AlbumArtURI = iconURI
 	obj.Class = "object.item." + mimeType.Type() + "Item"
 	var (
 		ffInfo        *ffprobe.Info
@@ -289,36 +327,36 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 		Size:       uint64(fileInfo.Size()),
 		Resolution: resolution,
 	})
-	if mimeType.IsVideo() {
-		if !me.NoTranscode {
-			item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
-		}
-		item.Res = append(item.Res, upnpav.Resource{
-			URL: (&url.URL{
-				Scheme: "http",
-				Host:   host,
-				Path:   subtitlePath,
-				RawQuery: url.Values{
-					"path": {cdsObject.Path},
-				}.Encode(),
-			}).String(),
-			ProtocolInfo: "http-get:*:text/plain",
-		})
-	}
-	if mimeType.IsVideo() || mimeType.IsImage() {
-		item.Res = append(item.Res, upnpav.Resource{
-			URL: (&url.URL{
-				Scheme: "http",
-				Host:   host,
-				Path:   iconPath,
-				RawQuery: url.Values{
-					"path": {cdsObject.Path},
-					"c":    {"jpeg"},
-				}.Encode(),
-			}).String(),
-			ProtocolInfo: "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN",
-		})
-	}
+	// if mimeType.IsVideo() {
+	// 	if !me.NoTranscode {
+	// 		item.Res = append(item.Res, transcodeResources(host, cdsObject.Path, resolution, resDuration)...)
+	// 	}
+	// 	item.Res = append(item.Res, upnpav.Resource{
+	// 		URL: (&url.URL{
+	// 			Scheme: "http",
+	// 			Host:   host,
+	// 			Path:   subtitlePath,
+	// 			RawQuery: url.Values{
+	// 				"path": {cdsObject.Path},
+	// 			}.Encode(),
+	// 		}).String(),
+	// 		ProtocolInfo: "http-get:*:text/plain",
+	// 	})
+	// }
+	// if mimeType.IsVideo() || mimeType.IsImage() {
+	// 	item.Res = append(item.Res, upnpav.Resource{
+	// 		URL: (&url.URL{
+	// 			Scheme: "http",
+	// 			Host:   host,
+	// 			Path:   iconPath,
+	// 			RawQuery: url.Values{
+	// 				"path": {cdsObject.Path},
+	// 				"c":    {"jpeg"},
+	// 			}.Encode(),
+	// 		}).String(),
+	// 		ProtocolInfo: "http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN",
+	// 	})
+	// }
 	ret = item
 	return
 }
@@ -365,7 +403,7 @@ func (me *contentDirectoryService) objectFromID(id string) (o object, err error)
 	if err != nil {
 		return
 	}
-	if o.Path == "0" {
+	if o.Path == "0" || o.Path == "V_T" {
 		o.Path = "/"
 	}
 	o.Path = path.Clean(o.Path)
@@ -407,7 +445,17 @@ func (me *contentDirectoryService) Handle(action string, argsXML []byte, r *http
 				objs, err = me.OnBrowseDirectChildren(obj.Path, obj.RootObjectPath, host, userAgent)
 			}
 			if err != nil {
-				return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
+				result, err := xml.Marshal(objs)
+				if err == nil {
+					totalMatches := len(objs)
+					return [][2]string{
+						{"Result", didl_lite(string(result))},
+						{"NumberReturned", fmt.Sprint(len(objs))},
+						{"TotalMatches", fmt.Sprint(totalMatches)},
+						{"UpdateID", me.updateIDString()},
+					}, nil
+				}
+				// return nil, upnp.Errorf(upnpav.NoSuchObjectErrorCode, err.Error())
 			}
 			totalMatches := len(objs)
 			objs = objs[func() (low int) {

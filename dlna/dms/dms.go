@@ -18,6 +18,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -819,6 +820,23 @@ func (server *Server) serveDynamicStream(w http.ResponseWriter, r *http.Request,
 	return nil
 }
 
+// https://stackoverflow.com/a/31551220/516188
+func GetLocalIP() string {
+    addrs, err := net.InterfaceAddrs()
+    if err != nil {
+        return ""
+    }
+    for _, address := range addrs {
+        // check the address type and if it is not a loopback the display it
+        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+            if ipnet.IP.To4() != nil {
+                return ipnet.IP.String()
+            }
+        }
+    }
+    return ""
+}
+
 func (server *Server) initMux(mux *http.ServeMux) {
 	// Handle root (presentationURL)
 	mux.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
@@ -870,8 +888,30 @@ func (server *Server) initMux(mux *http.ServeMux) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			w.Header().Set("Content-Type", string(mimeType))
-			w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(path.Base(filePath)))
+			w.Header().Set("Content-Type", strings.Replace(strings.Replace(string(mimeType), "matroska", "mkv", 1), "application/x-subrip", "smi/caption", 1))
+			w.Header().Set("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*")
+			fmt.Println("ext: ", filepath.Ext(filePath))
+			if filepath.Ext(filePath) == ".srt" {
+				// w.Header().Set("transferMode.dlna.org", "Bulk")
+				w.Header().Set("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*")
+			} else {
+				w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(path.Base(filePath)))
+				w.Header().Set("transferMode.dlna.org", "Streaming")
+				w.Header().Set("contentFeatures.dlna.org", "DLNA.ORG_PN=AVC_MP4_HP_HD_AAC;DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000")
+
+				subtitleFilePath := strings.TrimSuffix(filePath, filepath.Ext(filePath)) + ".srt"
+				_, error := os.Stat(subtitleFilePath)
+				if error == nil || !errors.Is(error, os.ErrNotExist) {
+					m1 := regexp.MustCompile(`\.[a-zA-Z0-9]+$`)
+					fmt.Println("srt url", m1.ReplaceAllString(r.URL.String(), ".srt"))
+					fmt.Println("url", r.URL.Host)
+					var srtPath = "http://" + GetLocalIP() + ":" + fmt.Sprint(server.httpPort()) + m1.ReplaceAllString(r.URL.String(), ".srt")
+					// var srtPath = "http://192.168.1.16:8200/Captions/2982.srt"
+					fmt.Println(srtPath) // ###:
+					w.Header().Set("CaptionInfo.sec", srtPath)
+				}
+			}
+
 			http.ServeFile(w, r, filePath)
 			return
 		}
@@ -988,8 +1028,8 @@ func (srv *Server) Init() (err error) {
      <dlna:X_DLNACAP/>
      <dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
      <dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
-     <sec:ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
-     <sec:X_ProductCap>smi,DCM10,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>`,
+     <sec:ProductCap>smi,getMediaInfo.sec,getCaptionInfo.sec</sec:ProductCap>
+     <sec:X_ProductCap>smi,getMediaInfo.sec,getCaptionInfo.sec</sec:X_ProductCap>`,
 				ServiceList: func() (ss []upnp.Service) {
 					for _, s := range services {
 						ss = append(ss, s.Service)
@@ -1016,7 +1056,7 @@ func (srv *Server) Init() (err error) {
 		return
 	}
 	srv.rootDescXML = append([]byte(`<?xml version="1.0"?>`), srv.rootDescXML...)
-	srv.Logger.Println("HTTP srv on", srv.HTTPConn.Addr())
+	srv.Logger.Println("HTTP srv on", srv.HTTPConn.Addr().String())
 	srv.initMux(srv.httpServeMux)
 	srv.ssdpStopped = make(chan struct{})
 	return nil
