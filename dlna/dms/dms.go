@@ -890,7 +890,7 @@ func (server *Server) initMux(mux *http.ServeMux) {
 			}
 			w.Header().Set("Content-Type", strings.Replace(strings.Replace(string(mimeType), "matroska", "mkv", 1), "application/x-subrip", "smi/caption", 1))
 			w.Header().Set("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*")
-			fmt.Println("ext: ", filepath.Ext(filePath))
+			// fmt.Println("ext: ", filepath.Ext(filePath))
 			if filepath.Ext(filePath) == ".srt" {
 				// w.Header().Set("transferMode.dlna.org", "Bulk")
 				w.Header().Set("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*")
@@ -903,11 +903,11 @@ func (server *Server) initMux(mux *http.ServeMux) {
 				_, error := os.Stat(subtitleFilePath)
 				if error == nil || !errors.Is(error, os.ErrNotExist) {
 					m1 := regexp.MustCompile(`\.[a-zA-Z0-9]+$`)
-					fmt.Println("srt url", m1.ReplaceAllString(r.URL.String(), ".srt"))
-					fmt.Println("url", r.URL.Host)
+					// fmt.Println("srt url", m1.ReplaceAllString(r.URL.String(), ".srt"))
+					// fmt.Println("url", r.URL.Host)
 					var srtPath = "http://" + GetLocalIP() + ":" + fmt.Sprint(server.httpPort()) + m1.ReplaceAllString(r.URL.String(), ".srt")
 					// var srtPath = "http://192.168.1.16:8200/Captions/2982.srt"
-					fmt.Println(srtPath) // ###:
+					// fmt.Println(srtPath) // ###:
 					w.Header().Set("CaptionInfo.sec", srtPath)
 				}
 			}

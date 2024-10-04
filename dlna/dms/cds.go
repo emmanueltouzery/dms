@@ -238,8 +238,8 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 		return
 	}
 
-	fmt.Println("fileinfo.name", fileInfo.Name())
-	fmt.Println("cds suff", cdsObject.FilePath())
+	// fmt.Println("fileinfo.name", fileInfo.Name())
+	// fmt.Println("cds suff", cdsObject.FilePath())
 	subtitleFilePath := strings.TrimSuffix(cdsObject.Path, filepath.Ext(cdsObject.Path)) + ".srt"
 	_, error := os.Stat(subtitleFilePath)
 	if error == nil || !errors.Is(error, os.ErrNotExist) {
@@ -251,7 +251,7 @@ func (me *contentDirectoryService) cdsObjectToUpnpavObject(
 				"path":  {subtitleFilePath},
 			}.Encode(),
 		}).String()
-		fmt.Println("CaptionInfoEx", srtPath) // ###:
+		// fmt.Println("CaptionInfoEx", srtPath) // ###:
 		// srtPath = "http://192.168.1.16:8200/Captions/2982.srt"
 		obj.CaptionInfo = srtPath
 	}
@@ -376,6 +376,7 @@ func (me *contentDirectoryService) readContainer(
 	}
 	sort.Sort(sfis)
 	for _, fi := range sfis.fileInfoSlice {
+		// fmt.Println("path", o.Path, fi.Name())
 		child := object{path.Join(o.Path, fi.Name()), me.RootObjectPath}
 		obj, err := me.cdsObjectToUpnpavObject(child, fi, host, userAgent)
 		if err != nil {
@@ -550,11 +551,21 @@ type object struct {
 
 // Returns the number of children this object has, such as for a container.
 func (cds *contentDirectoryService) objectChildCount(me object) int {
-	objs, err := cds.readContainer(me, "", "")
+
+	dirPath := me.FilePath()
+	dirFile, err := os.Open(dirPath)
 	if err != nil {
-		cds.Logger.Printf("error reading container: %s", err)
+		return 0
 	}
-	return len(objs)
+	defer dirFile.Close()
+	var dirContent []string
+	dirContent, err = dirFile.Readdirnames(-1)
+
+	// objs, err := cds.readContainer(me, "", "")
+	// if err != nil {
+	// 	cds.Logger.Printf("error reading container: %s", err)
+	// }
+	return len(dirContent)
 }
 
 func (cds *contentDirectoryService) objectHasChildren(obj object) bool {
